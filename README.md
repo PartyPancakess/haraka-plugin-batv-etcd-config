@@ -23,7 +23,7 @@ If the e-mail bounces, after checking if the key is correct or not or whether th
 ## Configuration
 The running etcd server must have 2 variables exclusively for this plugin: config_batv_secret and config_batv_maxAge. 
 The value of "config_batv_secret" must be a string, which is the secret key of the srs.
-The value of "config_batv_maxAge" must contain a string ("day" or "second"), which determines the type of the maximum age, and an integer, seperated by a hyphen.
+The value of "config_batv_maxAge" must contain a string ("day" or "second"), which determines the type of the maximum age, and an integer, separated by a hyphen.
 Below can be found example cases:
 ```
 config_batv_secret: "asecretkey"
