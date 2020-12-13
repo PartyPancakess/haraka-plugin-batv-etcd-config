@@ -1,20 +1,134 @@
+// Put this plugin's name before all the rcpt_to plugins in the config/plugins file.
+// This plugin requires haraka-necessary-helper-plugins to be in the same folder with it: https://github.com/PartyPancakess/haraka-necessary-helper-plugins
 'use strict'
 
+const Address = require('../haraka-necessary-helper-plugins/address-rfc2821').Address;
+
+var SRS = require("./srs.js");
+var rewriter;
+
+const { Etcd3 } = require('../haraka-necessary-helper-plugins/etcd3');
+const client = new Etcd3();
+
 exports.register = function () {
-  this.load_batv-etcd-config_ini()
+  this.inherits('queue/discard');
+
+  this.load_batv_ini();
+  
+  this.register_hook('data_post', 'relay');
+  this.register_hook('rcpt', 'rcpt');
 }
 
-exports.load_batv-etcd-config_ini = function () {
-  const plugin = this
+exports.load_batv_ini = function () {
+  const plugin = this;
 
-  plugin.cfg = plugin.config.get('batv-etcd-config.ini', {
-    booleans: [
-      '+enabled',               // plugin.cfg.main.enabled=true
-      '-disabled',              // plugin.cfg.main.disabled=false
-      '+feature_section.yes'    // plugin.cfg.feature_section.yes=true
-    ]
-  },
-  function () {
-    plugin.load_example_ini()
-  })
+  const tempConfig = {
+    srs: {
+        secret: 'asecretkey',
+        maxAgeSeconds: '-1',
+        maxAgeDays: '-1'
+    }
+  }
+  plugin.cfg = tempConfig;
+
+  (async () => {
+    plugin.cfg.srs.secret = await client.get('config_batv_secret').string();
+    const age = await (await client.get('config_batv_maxAge').string()).split("-");
+
+    if(age[0]==="day") {
+      plugin.cfg.srs.maxAgeDays = age[1];
+      plugin.cfg.srs.maxAgeSeconds = '-1';
+    }
+    else if(age[0]==="second") {
+      plugin.cfg.srs.maxAgeSeconds = age[1];
+      plugin.cfg.srs.maxAgeDays = '-1';
+    }
+    this.createSrs(plugin);
+  })();
+
+  client.watch()
+  .key('config_batv_secret')
+  .create()
+  .then(watcher => {
+    watcher
+      .on('disconnected', () => console.log('disconnected...'))
+      .on('connected', () => console.log('successfully reconnected!'))
+      .on('put', res => {
+        plugin.cfg.srs.secret = res.value.toString();
+        console.log('config_batv_secret got set to:', res.value.toString());
+        this.createSrs(plugin);
+      });
+  });
+
+  client.watch()
+  .key('config_batv_maxAge')
+  .create()
+  .then(watcher => {
+    watcher
+      .on('disconnected', () => console.log('disconnected...'))
+      .on('connected', () => console.log('successfully reconnected!'))
+      .on('put', res => {
+        const age = res.value.toString().split("-");
+        if(age[0]==="day") {
+          plugin.cfg.srs.maxAgeDays = age[1];
+          plugin.cfg.srs.maxAgeSeconds = '-1';
+        }
+        else if(age[0]==="second") {
+          plugin.cfg.srs.maxAgeSeconds = age[1];
+          plugin.cfg.srs.maxAgeDays = '-1';
+        }
+        console.log('config_batv_maxAge got set to:', res.value.toString());
+        console.log(plugin.cfg);
+        // plugin.load_batv_ini();
+        this.createSrs(plugin);
+      });
+  });
+
+  this.createSrs(plugin);
+}
+
+exports.rcpt = function (next, connection, params) { // Check the rcpt and decide if it is spam or not.
+  var txn = connection.transaction;
+  const plugin = this;
+
+  if(!connection.relaying && txn.mail_from.isNull()) { // Incoming
+    var oldUser = txn.rcpt_to[0].user;
+    var reversed = rewriter.reverse(oldUser);
+    
+    if(reversed === null || reversed === undefined) {
+      connection.logdebug(plugin, "marking " + txn.rcpt_to + " for drop");
+      connection.transaction.notes.discard = true;
+    }
+    else {
+      txn.rcpt_to.pop();
+      var sendTo = reversed[0] + "@" + reversed[1];
+      txn.rcpt_to.push(new Address(`<${sendTo}>`));
+    }
+  }
+
+  next();
+}
+
+exports.relay = function (next, connection) { // Change the sender address of outgoing e-mails.
+  var txn = connection.transaction;
+  if (connection.relaying) {    
+    var oldMailFrom = txn.mail_from;
+    var rewritten = rewriter.rewrite(oldMailFrom.user, oldMailFrom.host);
+    var newMail = new Address(`<${rewritten}@${oldMailFrom.host}>`);
+
+    txn.mail_from = newMail;
+  }
+
+  next();
+}
+
+exports.createSrs = function (plugin) {
+  var maxAgeSeconds = 21 * 24 * 60 * 60; // default: 21 days 
+  if(plugin.cfg.srs.maxAgeDays !== '-1') maxAgeSeconds = plugin.cfg.srs.maxAgeDays * 24 * 60 * 60;
+  else if(plugin.cfg.srs.maxAgeSeconds !== '-1') maxAgeSeconds = plugin.cfg.srs.maxAgeSeconds;
+
+  rewriter = new SRS({
+    secret: plugin.cfg.srs.secret,
+    maxAge: maxAgeSeconds
+  });
 }

@@ -1,7 +1,7 @@
 {
   "name": "haraka-plugin-batv-etcd-config",
   "version": "1.0.0",
-  "description": "Haraka plugin that frobnicates email connections",
+  "description": "Haraka plugin for Bounce Address Tag Validation, which uses etcd to store its config.",
   "main": "index.js",
   "scripts": {
     "lint": "npx eslint *.js test/*.js",
@@ -12,19 +12,21 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/haraka/haraka-plugin-batv-etcd-config.git"
+    "url": "git+https://github.com/PartyPancakess/haraka-plugin-batv-etcd-config.git"
   },
   "keywords": [
     "haraka",
     "plugin",
-    "batv-etcd-config"
+    "batv",
+    "batv-etcd-config",
+    "etcd"
   ],
-  "author": "Welcome Member <happy-haraka-hacker@example.com>",
+  "author": "Bilge ONAYCI <bilgehalilonayci@gmail.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/haraka/haraka-plugin-batv-etcd-config/issues"
+    "url": "https://github.com/PartyPancakess/haraka-plugin-batv-etcd-config/issues"
   },
-  "homepage": "https://github.com/haraka/haraka-plugin-batv-etcd-config#readme",
+  "homepage": "https://github.com/PartyPancakess/haraka-plugin-batv-etcd-config#readme",
   "devDependencies": {
     "eslint": "*",
     "eslint-plugin-haraka": "*",

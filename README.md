@@ -1,71 +1,43 @@
 [![Unix Build Status][ci-img]][ci-url]
 [![Windows Build Status][ci-win-img]][ci-win-url]
 [![Code Climate][clim-img]][clim-url]
-[![NPM][npm-img]][npm-url]
 
 # haraka-plugin-batv-etcd-config
 
-Clone me, to create a new Haraka plugin!
+This Bounce Address Tag Validation plugin uses "etcd" to access to its config variables. Otherwise, it functions exactly the same way as the batv plugin: https://github.com/PartyPancakess/haraka-plugin-batv
 
-# Template Instructions
 
-These instructions will not self-destruct after use. Use and destroy.
+This plugin uses srs.js script directly. For more information, please check: https://www.npmjs.com/package/srs.js
 
-See also, [How to Write a Plugin](https://github.com/haraka/Haraka/wiki/Write-a-Plugin) and [Plugins.md](https://github.com/haraka/Haraka/blob/master/docs/Plugins.md) for additional plugin writing information.
+& IMPORTANT: this plugin must appear in  `config/plugins`  before other plugins that run on hook_rcpt
 
-## Create a new repo for your plugin
+## How it works
+Assume that the user uses the address example@domain.com and will send an e-mail.
 
-Haraka plugins are named like `haraka-plugin-something`. All the namespace after `haraka-plugin-` is yours for the taking. Please check the [Plugins](https://github.com/haraka/Haraka/blob/master/Plugins.md) page and a Google search to see what plugins already exist.
+Before the e-mail is sent, example@domain.com will automatically change to:
+SRS0=HHH=TT=domain.com=example@domain.com
 
-Once you've settled on a name, create the GitHub repo. On the repo's main page, click the _Clone or download_ button and copy the URL. Then paste that URL into a local ENV variable with a command like this:
+If the e-mail bounces, after checking if the key is correct or not or whether there is a key at all, it will be forwarded to example@domain.com.
 
-```sh
-export MY_GITHUB_ORG=haraka
-export MY_PLUGIN_NAME=haraka-plugin-SOMETHING
+
+## Configuration
+The running etcd server must have 2 variables exclusively for this plugin: config_batv_secret and config_batv_maxAge. 
+The value of "config_batv_secret" must be a string, which is the secret key of the srs.
+The value of "config_batv_maxAge" must contain a string ("day" or "second"), which determines the type of the maximum age, and an integer, seperated by a hyphen.
+Below can be found example cases:
+```
+config_batv_secret: "asecretkey"
+config_batv_maxAge: "day-21"
+
+or
+
+config_batv_secret: "asecretkey"
+config_batv_maxAge: "second-1814400"
 ```
 
-Clone and rename the batv-etcd-config repo:
-
-```sh
-git clone git@github.com:haraka/haraka-plugin-batv-etcd-config.git
-mv haraka-plugin-batv-etcd-config $MY_PLUGIN_NAME
-cd $MY_PLUGIN_NAME
-git remote rm origin
-git remote add origin "git@github.com:$MY_GITHUB_ORG/$MY_PLUGIN_NAME.git"
-```
-
-Now you'll have a local git repo to begin authoring your plugin
-
-## rename boilerplate
-
-Replaces all uses of the word `batv-etcd-config` with your plugin's name.
-
-./redress.sh [something]
-
-You'll then be prompted to update package.json and then force push this repo onto the GitHub repo you've created earlier.
 
 
-# Add your content here
 
-## INSTALL
-
-```sh
-cd /path/to/local/haraka
-npm install haraka-plugin-batv-etcd-config
-echo "batv-etcd-config" >> config/plugins
-service haraka restart
-```
-
-### Configuration
-
-If the default configuration is not sufficient, copy the config file from the distribution into your haraka config dir and then modify it:
-
-```sh
-cp node_modules/haraka-plugin-batv-etcd-config/config/batv-etcd-config.ini config/batv-etcd-config.ini
-$EDITOR config/batv-etcd-config.ini
-```
-
-## USAGE
 
 
 <!-- leave these buried at the bottom of the document -->
