@@ -36,6 +36,12 @@ config_batv_maxAge: "second-1814400"
 ```
 
 
+## Example etcd Configuration
+```
+etcdctl put config_batv_maxAge day-7
+etcdctl put config_batv_secret secretkey
+```
+
 
 
 
