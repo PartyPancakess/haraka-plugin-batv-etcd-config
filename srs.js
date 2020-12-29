@@ -8,7 +8,7 @@ var timeBaseChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567",
   timeBaseBits = 5,
   timePrecision = 1, // second based
   timeSlots = (1<<(timeBaseBits<<(timeSize-1))),
-  validSeparators = "=-+";
+  validSeparators = "=";
 
 function makeTimestamp() {
   var now = Math.round(Date.now() / 1000 / timePrecision);
@@ -20,9 +20,10 @@ function makeTimestamp() {
 
 function createHash(secret, timestamp, domain, local) {
   var hmac = crypto.createHmac("sha1", secret);
-  Array.prototype.slice.call(arguments, 1).forEach(function(data) {
-    hmac.update(data);
-  });
+  hmac.update(timestamp);
+  hmac.update(domain);
+  hmac.update(local);
+
   return hmac.digest("hex").substring(0, 4);
 }
 
@@ -53,56 +54,35 @@ function SRS(options) {
     throw new TypeError("Invalid separator");
   }
 
-  this.srs0Re = new RegExp("SRS0[\\-=+]([0-9a-f]{4})=" + 
-                            "([" + timeBaseChars + "]{2})=" +
-                            "([^=]*)=(.*)");
-
-  this.srs1Re = new RegExp("SRS1[\\-=+]([0-9a-f]{4})=([^=]*)=(.*)");
+  this.prvsRe = new RegExp("prvs=" + 
+                            "([" + timeBaseChars + "]{2})" + "([0-9a-f]{4})=" + 
+                            "(.*)");
 }
 
-SRS.prototype.isSrs0 = function(local) {
-  return local.indexOf("SRS0") === 0;
-};
-
-SRS.prototype.isSrs1 = function(local) {
-  return local.indexOf("SRS1") === 0;
+SRS.prototype.isPrvs = function(local) {
+  return local.indexOf("prvs") === 0;
 };
 
 SRS.prototype.rewrite = function(local, domain) {
-  if (this.isSrs0(local)) {
-    // Create a guarded address.
-    var guarded = local.substring(4);
-    return "SRS1" + this.separator + createHash(this.secret, domain, guarded) +
-           this.separator + domain + this.separator + guarded;
-  } else if (this.isSrs1(local)) {
-    var match = this.srs1Re.exec(local);
-    if (!match) {
-      throw new Error("Attempted to rewrite invalid SRS1 address.");
-    }
-    return "SRS1" + this.separator + createHash(this.secret, match[2], match[3]) +
-           "=" + match[2] + "=" + match[3];
-  }
-
   var timestamp = makeTimestamp();
   var hash = createHash(this.secret, timestamp, domain, local);    
 
-  return "SRS0" + this.separator + hash + "=" + timestamp +
-                  "=" + domain + "=" + local;
+  return "prvs=" + timestamp + hash + "=" + local;
 };
 
 SRS.prototype.reverse = function(address, addressDomain) {
   var matches, hash, timestamp, domain, local, expectedHash;
 
-  if (this.isSrs0(address)) {
-    matches = this.srs0Re.exec(address);
+  if (this.isPrvs(address)) {
+    matches = this.prvsRe.exec(address);
     if (!matches) {
-      throw new TypeError("Unrecognized SRS0 format");
+      throw new TypeError("Unrecognized prvs format");
     }
     
-    hash = matches[1];
-    timestamp = matches[2];
-    domain = matches[3];
-    local = matches[4];
+    timestamp = matches[1];
+    hash = matches[2];
+    local = matches[3];
+    domain = addressDomain;
 
     expectedHash = createHash(this.secret, timestamp, domain, local);
     if (expectedHash !== hash) {
@@ -114,22 +94,6 @@ SRS.prototype.reverse = function(address, addressDomain) {
     }
 
     return [local, domain];
-  } else if (this.isSrs1(address)) {
-    matches = this.srs1Re.exec(address);
-    if (!matches) {
-      throw new TypeError("Unrecognized SRS1 format");
-    }
-    
-    hash = matches[1];
-    domain = matches[2];
-    local = matches[3];
-
-    expectedHash = createHash(this.secret, domain, local);
-    if (expectedHash !== hash) {
-      throw new TypeError("Invalid signature");
-    }
-
-    return ["SRS0" + local, domain];
   }
 
   return null;

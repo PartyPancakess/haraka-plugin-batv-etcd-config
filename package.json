@@ -1,6 +1,6 @@
 {
   "name": "haraka-plugin-batv-etcd-config",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Haraka plugin for Bounce Address Tag Validation, which uses etcd to store its config.",
   "main": "index.js",
   "scripts": {

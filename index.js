@@ -78,8 +78,7 @@ exports.load_batv_ini = function () {
           plugin.cfg.srs.maxAgeDays = '-1';
         }
         console.log('config_batv_maxAge got set to:', res.value.toString());
-        console.log(plugin.cfg);
-        // plugin.load_batv_ini();
+        // console.log(plugin.cfg);
         this.createSrs(plugin);
       });
   });
@@ -92,8 +91,8 @@ exports.rcpt = function (next, connection, params) { // Check the rcpt and decid
   const plugin = this;
 
   if(!connection.relaying && txn.mail_from.isNull()) { // Incoming
-    var oldUser = txn.rcpt_to[0].user;
-    var reversed = rewriter.reverse(oldUser);
+    var oldAddress = txn.rcpt_to[0];
+    var reversed = rewriter.reverse(oldAddress.user, oldAddress.host);
     
     if(reversed === null || reversed === undefined) {
       connection.logdebug(plugin, "marking " + txn.rcpt_to + " for drop");

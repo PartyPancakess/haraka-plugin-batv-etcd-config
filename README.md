@@ -4,10 +4,9 @@
 
 # haraka-plugin-batv-etcd-config
 
-This Bounce Address Tag Validation plugin uses "etcd" to access to its config variables. Otherwise, it functions exactly the same way as the batv plugin: https://github.com/PartyPancakess/haraka-plugin-batv
+This Bounce Address Tag Validation plugin uses "etcd" to access to its config variables, different from the original batv plugin: https://github.com/PartyPancakess/haraka-plugin-batv
 
-
-This plugin uses srs.js script directly. For more information, please check: https://www.npmjs.com/package/srs.js
+Also, it uses a changed version of srs.js script: https://www.npmjs.com/package/srs.js
 
 & IMPORTANT: this plugin must appear in  `config/plugins`  before other plugins that run on hook_rcpt
 
@@ -15,7 +14,7 @@ This plugin uses srs.js script directly. For more information, please check: htt
 Assume that the user uses the address example@domain.com and will send an e-mail.
 
 Before the e-mail is sent, example@domain.com will automatically change to:
-SRS0=HHH=TT=domain.com=example@domain.com
+prvs=tagvalue=example@domain.com
 
 If the e-mail bounces, after checking if the key is correct or not or whether there is a key at all, it will be forwarded to example@domain.com.
 
