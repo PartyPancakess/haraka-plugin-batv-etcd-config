@@ -19,7 +19,7 @@ function makeTimestamp() {
 }
 
 function createHash(secret, timestamp, domain, local) {
-  var hmac = crypto.createHmac("sha1", secret);
+  var hmac = crypto.createHmac("sha1", secret.toString());
   hmac.update(timestamp);
   hmac.update(domain);
   hmac.update(local);

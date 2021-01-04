@@ -31,20 +31,22 @@ exports.load_batv_ini = function () {
   }
   plugin.cfg = tempConfig;
 
-  (async () => {
-    plugin.cfg.srs.secret = await client.get('config_batv_secret').string();
-    const age = await (await client.get('config_batv_maxAge').string()).split("-");
+    plugin.cfg.srs.secret = client.get('config_batv_secret').string();
+    client.get('config_batv_maxAge').string()
+    .then(value => {
+        const age = value.split("-");
 
-    if(age[0]==="day") {
-      plugin.cfg.srs.maxAgeDays = age[1];
-      plugin.cfg.srs.maxAgeSeconds = '-1';
-    }
-    else if(age[0]==="second") {
-      plugin.cfg.srs.maxAgeSeconds = age[1];
-      plugin.cfg.srs.maxAgeDays = '-1';
-    }
-    this.createSrs(plugin);
-  })();
+        if(age[0]==="day") {
+          plugin.cfg.srs.maxAgeDays = age[1];
+          plugin.cfg.srs.maxAgeSeconds = '-1';
+        }
+        else if(age[0]==="second") {
+          plugin.cfg.srs.maxAgeSeconds = age[1];
+          plugin.cfg.srs.maxAgeDays = '-1';
+        }
+        this.createSrs(plugin);
+      }
+    )
 
   client.watch()
   .key('config_batv_secret')
