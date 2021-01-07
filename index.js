@@ -8,7 +8,9 @@ var SRS = require("./srs.js");
 var rewriter;
 
 const { Etcd3 } = require('../haraka-necessary-helper-plugins/etcd3');
-const client = new Etcd3();
+
+const etcdSourceAddress = process.env.ETCD_ADDR || '127.0.0.1:2379';
+const client = new Etcd3({hosts:etcdSourceAddress});
 
 exports.register = function () {
   this.inherits('queue/discard');
@@ -31,9 +33,17 @@ exports.load_batv_ini = function () {
   }
   plugin.cfg = tempConfig;
 
-    plugin.cfg.srs.secret = client.get('config_batv_secret').string();
-    client.get('config_batv_maxAge').string()
-    .then(value => {
+  client.get('config_batv_secret').string()
+  .then(secret => {
+    if (secret) {
+      plugin.cfg.srs.secret = secret;
+    }
+    else console.log("Something went wrong while reading config_batv_secret from Etcd");
+  });
+
+  client.get('config_batv_maxAge').string()
+  .then(value => {
+      if (value) {
         const age = value.split("-");
 
         if(age[0]==="day") {
@@ -46,7 +56,9 @@ exports.load_batv_ini = function () {
         }
         this.createSrs(plugin);
       }
-    )
+      else console.log("Something went wrong while reading config_batv_maxAge from Etcd");
+    }
+  );
 
   client.watch()
   .key('config_batv_secret')
