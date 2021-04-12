@@ -7,10 +7,16 @@ const Address = require('../haraka-necessary-helper-plugins/address-rfc2821').Ad
 var SRS = require("./srs.js");
 var rewriter;
 
+const fs = require('fs');
+const path = require('path');
+
 const { Etcd3 } = require('../haraka-necessary-helper-plugins/etcd3');
 
 const etcdSourceAddress = process.env.ETCD_ADDR || '127.0.0.1:2379';
 const client = new Etcd3({hosts:etcdSourceAddress});
+
+var secret_count = 1;
+var secret_history = [];
 
 exports.register = function () {
   this.inherits('queue/discard');
@@ -33,15 +39,31 @@ exports.load_batv_ini = function () {
   }
   plugin.cfg = tempConfig;
 
-  client.get('config_batv_secret').string()
+  client.get('config/mta/batv/secret').string()
   .then(secret => {
     if (secret) {
       plugin.cfg.srs.secret = secret;
     }
-    else console.log("Something went wrong while reading config_batv_secret from Etcd");
+    else console.log("Something went wrong while reading config/mta/batv/secret from Etcd");
   });
 
-  client.get('config_batv_maxAge').string()
+
+  fs.readFile(path.resolve(__dirname, "history"), 'utf8' , (err, data) => {
+    if (err) {
+      console.error(err + " Check haraka-plugin-batv-etcd-config.");
+      return;
+    }
+    var list = data.split('\n');
+    if (list.length > 1 && !list[list.length-1]) list.splice(list.length-1, 1);
+    if (list.length > 0) {
+      secret_history = list;
+      secret_count = secret_history.length + 1;
+      this.createSrs(plugin);
+    }
+  });
+
+
+  client.get('config/mta/batv/maxAge').string()
   .then(value => {
       if (value) {
         const age = value.split("-");
@@ -56,26 +78,38 @@ exports.load_batv_ini = function () {
         }
         this.createSrs(plugin);
       }
-      else console.log("Something went wrong while reading config_batv_maxAge from Etcd");
+      else console.log("Something went wrong while reading config/mta/batv/maxAge from Etcd");
     }
   );
+  
 
   client.watch()
-  .key('config_batv_secret')
+  .key('config/mta/batv/secret')
   .create()
   .then(watcher => {
     watcher
       .on('disconnected', () => console.log('disconnected...'))
       .on('connected', () => console.log('successfully reconnected!'))
       .on('put', res => {
+        secret_history.push(plugin.cfg.srs.secret); // append the old secret to history list
+        if (secret_history[0] === '') secret_history.splice(0, 1);
         plugin.cfg.srs.secret = res.value.toString();
-        console.log('config_batv_secret got set to:', res.value.toString());
+        console.log('config/mta/batv/secret got set to:', res.value.toString());
         this.createSrs(plugin);
-      });
-  });
+
+        fs.writeFile(path.resolve(__dirname, "history"), secret_history.join('\n'), err => {
+          if (err) {
+            console.error(err + " Check haraka-plugin-batv-etcd-config.");
+            return;
+          }
+        })
+
+      })
+    });
+  
 
   client.watch()
-  .key('config_batv_maxAge')
+  .key('config/mta/batv/maxAge')
   .create()
   .then(watcher => {
     watcher
@@ -91,8 +125,7 @@ exports.load_batv_ini = function () {
           plugin.cfg.srs.maxAgeSeconds = age[1];
           plugin.cfg.srs.maxAgeDays = '-1';
         }
-        console.log('config_batv_maxAge got set to:', res.value.toString());
-        // console.log(plugin.cfg);
+        console.log('config/mta/batv/maxAge got set to:', res.value.toString());
         this.createSrs(plugin);
       });
   });
@@ -102,24 +135,42 @@ exports.load_batv_ini = function () {
 
 exports.rcpt = function (next, connection, params) { // Check the rcpt and decide if it is spam or not.
   var txn = connection.transaction;
+  var toDeny = false;
   const plugin = this;
+  if (!connection.relaying) { // incoming
+    if (!txn.mail_from.isNull()) {
+      if (rewriter.isPrvs(txn.rcpt_to[0].user)) {
+        var oldAddress = txn.rcpt_to[0];
+        var reversed = rewriter.reverse(oldAddress.user, oldAddress.host);
 
-  if(!connection.relaying && txn.mail_from.isNull()) { // Incoming
-    var oldAddress = txn.rcpt_to[0];
-    var reversed = rewriter.reverse(oldAddress.user, oldAddress.host);
-    
-    if(reversed === null || reversed === undefined) {
-      connection.logdebug(plugin, "marking " + txn.rcpt_to + " for drop");
-      connection.transaction.notes.discard = true;
+        if(!reversed) {
+          toDeny = true;
+        }
+        else {
+          txn.rcpt_to.pop();
+          var sendTo = reversed[0] + "@" + reversed[1];
+          txn.rcpt_to.push(new Address(`<${sendTo}>`));
+        }
+      }
     }
     else {
-      txn.rcpt_to.pop();
-      var sendTo = reversed[0] + "@" + reversed[1];
-      txn.rcpt_to.push(new Address(`<${sendTo}>`));
+      var oldAddress = txn.rcpt_to[0];
+      var reversed = rewriter.reverse(oldAddress.user, oldAddress.host);
+      
+      if(reversed === null || reversed === undefined || !reversed) {
+        connection.logdebug(plugin, "marking " + txn.rcpt_to + " for drop");
+        connection.transaction.notes.discard = true;
+      }
+      else {
+        txn.rcpt_to.pop();
+        var sendTo = reversed[0] + "@" + reversed[1];
+        txn.rcpt_to.push(new Address(`<${sendTo}>`));
+      }
     }
   }
 
-  next();
+  if (toDeny) next(DENYSOFT, "Address is not accepted!");
+  else next();
 }
 
 exports.relay = function (next, connection) { // Change the sender address of outgoing e-mails.
@@ -142,6 +193,8 @@ exports.createSrs = function (plugin) {
 
   rewriter = new SRS({
     secret: plugin.cfg.srs.secret,
-    maxAge: maxAgeSeconds
+    maxAge: maxAgeSeconds,
+    secretCount: secret_count,
+    secretList: secret_history
   });
 }

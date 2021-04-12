@@ -45,6 +45,8 @@ function SRS(options) {
   this.secret = options.secret;
   this.separator = (options.separator || "=")[0];
   this.maxAge = options.maxAge || (21 * 24 * 60 * 60); // 21 days
+  this.secretCount = options.secretCount;
+  this.secretList = options.secretList;
 
   if (!this.secret) {
     throw new TypeError("A secret must be provided");
@@ -55,7 +57,7 @@ function SRS(options) {
   }
 
   this.prvsRe = new RegExp("prvs=" + 
-                            "([" + timeBaseChars + "]{2})" + "([0-9a-f]{4})=" + 
+                            "([" + timeBaseChars + "]{2})" + "([0-9a-f]{4})=([0-9]+)=" + 
                             "(.*)");
 }
 
@@ -67,30 +69,39 @@ SRS.prototype.rewrite = function(local, domain) {
   var timestamp = makeTimestamp();
   var hash = createHash(this.secret, timestamp, domain, local);    
 
-  return "prvs=" + timestamp + hash + "=" + local;
+  return "prvs=" + timestamp + hash + "=" + this.secretCount + "=" + local;
 };
 
 SRS.prototype.reverse = function(address, addressDomain) {
-  var matches, hash, timestamp, domain, local, expectedHash;
+  var matches, hash, timestamp, domain, local, expectedHash, secretID;
 
   if (this.isPrvs(address)) {
     matches = this.prvsRe.exec(address);
     if (!matches) {
-      throw new TypeError("Unrecognized prvs format");
+      // throw new TypeError("Unrecognized prvs format");
+      return null;
     }
     
     timestamp = matches[1];
     hash = matches[2];
-    local = matches[3];
+    secretID = matches[3];
+    local = matches[4];
     domain = addressDomain;
 
-    expectedHash = createHash(this.secret, timestamp, domain, local);
+    var usedSecret = this.secret;
+    if(secretID <= this.secretList.length) {
+      usedSecret = this.secretList[secretID-1];
+    }
+
+    expectedHash = createHash(usedSecret, timestamp, domain, local);
     if (expectedHash !== hash) {
-      throw new TypeError("Invalid signature");
+      // throw new TypeError("Invalid signature");
+      return null;
     }
 
     if (!checkTimestamp(timestamp, this.maxAge)) {
-      throw new TypeError("Address has expired");
+      // throw new TypeError("Address has expired");
+      return null;
     }
 
     return [local, domain];
